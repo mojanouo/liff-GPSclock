@@ -3,57 +3,47 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GPS 打卡</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
 <style>
-body {
-  font-family: Arial;
-  padding: 20px;
+body{font-family:Arial;padding:20px}
+
+#name{font-size:24px;font-weight:bold}
+.mid{font-size:16px;margin-top:6px}
+
+textarea{
+ width:100%;
+ height:120px;
+ margin-top:10px;
 }
 
-#name {
-  font-size: 24px;
-  font-weight: bold;
+button{
+ padding:14px 40px;
+ background:#6FD9B2;
+ color:black;
+ border:none;
+ border-radius:8px;
+ font-size:18px;
 }
 
-.mid {
-  font-size: 16px;
-  margin-top: 8px;
+button:disabled{
+ background:#ccc;
+ opacity:.5;
 }
 
-textarea {
-  width: 100%;
-  height: 120px;
-  margin-top: 10px;
+.center{text-align:center;margin-top:20px}
+
+#overlay,#done{
+ position:fixed;top:0;left:0;width:100%;height:100%;
+ background:rgba(0,0,0,.4);
+ display:none;align-items:center;justify-content:center
 }
 
-button {
-  margin-top: 20px;
-  padding: 14px 40px;
-  background:#6FD9B2;
-  color:black;
-  border:none;
-  border-radius:8px;
-  font-size:18px;
+.box{
+ background:white;padding:30px;border-radius:12px;text-align:center
 }
 
-.center {
-  text-align:center;
-}
-
-#overlay {
-  position:fixed;
-  top:0;left:0;
-  width:100%;
-  height:100%;
-  background:rgba(0,0,0,0.4);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  color:white;
-  font-size:22px;
-}
+#map{margin-top:10px}
 </style>
 </head>
 
@@ -61,93 +51,100 @@ button {
 
 <div id="overlay">⏳ 系統處理中...</div>
 
-<div id="name">載入中...</div>
-<div class="mid" id="time"></div>
-<div class="mid" id="info"></div>
+<div id="done">
+ <div class="box">
+  <div style="font-size:26px">✅ 打卡完成</div>
+  <div id="donetime" style="font-size:32px;margin-top:10px"></div>
+ </div>
+</div>
 
-<textarea id="reason" placeholder="您目前位於工廠範圍外，請說明原因後再打卡" style="display:none"></textarea>
+<div id="name">載入中...</div>
+<div id="time" class="mid"></div>
+<div id="info" class="mid"></div>
+<img id="map" width="100%">
+
+<textarea id="reason" style="display:none"
+ placeholder="您目前位於工廠範圍外，請說明原因後再打卡"></textarea>
 
 <div class="center">
-<button id="btn" disabled>打卡</button>
+<button id="btn" style="display:none" disabled>打卡</button>
 </div>
 
 <script>
 
-const liffId = "2008996338-0gw2Kj6n";
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwxiWrDVoNWGS6mKNru2W7xaXfA09VgtLAy17Y7wTg2JuMkNseeH3QS1LF1agbhmbd8/exec";
+const liffId="2008996338-0gw2Kj6n";
+const GAS_URL="https://script.google.com/macros/s/AKfycbzl00SYdOa1_7bDNspeKy2dvbmbb-dyYAEIZ4AMjCClsljOqcixkSiNXTfWJUb-f5E/exec";
 
-const factoryLat = 24.09889432557895;
-const factoryLng = 120.53815663297149;
+const fLat=24.09889432557895;
+const fLng=120.53815663297149;
 
-function dist(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const dLat = (lat2-lat1)*Math.PI/180;
-  const dLon = (lon2-lon1)*Math.PI/180;
-  const a =
-    Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-    Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-async function main() {
-  await liff.init({ liffId });
-
-  const profile = await liff.getProfile();
-  document.getElementById("name").innerText = "你好 " + profile.displayName;
-
-  const now = new Date();
-  document.getElementById("time").innerText =
-    "現在時間：" + now.toLocaleString();
-
-  navigator.geolocation.getCurrentPosition(pos => {
-    const lat = pos.coords.latitude;
-    const lng = pos.coords.longitude;
-
-    const d = dist(lat,lng,factoryLat,factoryLng);
-
-    const btn = document.getElementById("btn");
-    const info = document.getElementById("info");
-    const reason = document.getElementById("reason");
-
-    let inRange = d <= 250;
-
-    if (inRange) {
-      info.innerText = "已在工廠範圍內 ✅";
-      btn.disabled = false;
-    } else {
-      info.innerText = "目前位於工廠範圍外 ("+Math.round(d)+"m)";
-      reason.style.display = "block";
-      reason.oninput = ()=> btn.disabled = reason.value.trim()==="";
-    }
-
-    btn.onclick = async ()=> {
-      document.getElementById("overlay").style.display="flex";
-
-      const send = {
-        userId: profile.userId,
-        name: profile.displayName,
-        lat, lng,
-        reason: inRange ? "✅" : reason.value
-      };
-
-      await fetch(GAS_URL,{
-        method:"POST",
-        body:JSON.stringify(send)
-      });
-
-      document.getElementById("overlay").style.display="none";
-
-      const t = new Date().toLocaleTimeString().slice(0,5);
-      alert("✅ 打卡完成\n時間："+t);
-    };
-
-  });
-
+function dist(a,b,c,d){
+ const R=6371000;
+ const x=(c-a)*Math.PI/180;
+ const y=(d-b)*Math.PI/180;
+ const A=Math.sin(x/2)**2+
+ Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
+ Math.sin(y/2)**2;
+ return R*2*Math.atan2(Math.sqrt(A),Math.sqrt(1-A));
 }
 
 main();
-</script>
 
+async function main(){
+ await liff.init({liffId});
+ const p=await liff.getProfile();
+
+ document.getElementById("name").innerText="你好 "+p.displayName;
+ document.getElementById("time").innerText="現在時間："+new Date().toLocaleString();
+
+ navigator.geolocation.getCurrentPosition(pos=>{
+  const lat=pos.coords.latitude;
+  const lng=pos.coords.longitude;
+
+  document.getElementById("map").src=
+   `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=17&size=600x300&markers=color:red|${lat},${lng}`;
+
+  const d=Math.round(dist(lat,lng,fLat,fLng));
+  const btn=document.getElementById("btn");
+  btn.style.display="inline-block";
+
+  let inRange=d<=250;
+
+  if(inRange){
+   info.innerText="已在工廠範圍內 ✅";
+   btn.disabled=false;
+  }else{
+   info.innerText=`目前位於工廠外 ${d}m`;
+   reason.style.display="block";
+   reason.oninput=()=>btn.disabled=!reason.value.trim();
+  }
+
+  btn.onclick=async()=>{
+   overlay.style.display="flex";
+
+   await fetch(GAS_URL,{
+    method:"POST",
+    body:JSON.stringify({
+     userId:p.userId,
+     name:p.displayName,
+     reason:inRange?"✅":reason.value
+    })
+   });
+
+   overlay.style.display="none";
+
+   const now=new Date();
+   const t=now.getHours().toString().padStart(2,"0")+":"+
+           now.getMinutes().toString().padStart(2,"0");
+
+   donetime.innerText=t;
+   done.style.display="flex";
+
+   setTimeout(()=>liff.closeWindow(),3000);
+  };
+
+ });
+}
+</script>
 </body>
 </html>
