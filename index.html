@@ -2,129 +2,152 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LIFF GPS 打卡</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPS 打卡</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+
 <style>
-  body { font-family: Arial; padding: 20px; }
-  h2 { font-size: 28px; margin-bottom: 10px; }
-  .time, .instruction { font-size: 18px; font-weight: normal; margin-bottom: 10px; }
-  #status { color: blue; white-space: pre-line; }
-  #clockBtn { font-size: 18px; padding: 10px 20px; margin-top: 10px; }
-  #reason { display: none; margin-top: 10px; width: 100%; }
+body {
+  font-family: Arial;
+  padding: 20px;
+}
+
+#name {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.mid {
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+textarea {
+  width: 100%;
+  height: 120px;
+  margin-top: 10px;
+}
+
+button {
+  margin-top: 20px;
+  padding: 14px 40px;
+  background:#6FD9B2;
+  color:black;
+  border:none;
+  border-radius:8px;
+  font-size:18px;
+}
+
+.center {
+  text-align:center;
+}
+
+#overlay {
+  position:fixed;
+  top:0;left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.4);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  color:white;
+  font-size:22px;
+}
 </style>
 </head>
+
 <body>
-<h2 id="name">載入中...</h2>
-<p id="time" class="time"></p>
-<p id="instruction" class="instruction"></p>
-<p id="status">初始化中...</p>
 
-<input type="text" id="reason" placeholder="請輸入外出說明">
+<div id="overlay">⏳ 系統處理中...</div>
 
-<button id="clockBtn" disabled>打卡</button>
+<div id="name">載入中...</div>
+<div class="mid" id="time"></div>
+<div class="mid" id="info"></div>
+
+<textarea id="reason" placeholder="您目前位於工廠範圍外，請說明原因後再打卡" style="display:none"></textarea>
+
+<div class="center">
+<button id="btn" disabled>打卡</button>
+</div>
 
 <script>
+
 const liffId = "2008996338-0gw2Kj6n";
-const GAS_URL = "https://script.google.com/macros/s/AKfycbz3w9QozKDS2bWVEq8aQyZX8G5YIW6OJMs6qiVnocmrt0vJDNueG6c0z63A7A_hMrzj/exec";  // ← 替換成你的 GAS URL
+const GAS_URL = "https://script.google.com/macros/s/AKfycbwxiWrDVoNWGS6mKNru2W7xaXfA09VgtLAy17Y7wTg2JuMkNseeH3QS1LF1agbhmbd8/exec";
 
-// 工廠中心經緯度
-const FACTORY_CENTER = { lat: 24.09889432557895, lng: 120.53815663297149 };
-const FACTORY_RADIUS = 250; // 公尺
+const factoryLat = 24.09889432557895;
+const factoryLng = 120.53815663297149;
 
-// 計算兩點距離（公尺）
-function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // 地球半徑（公尺）
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
+function dist(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
   const a =
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
+    Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
 async function main() {
-  const nameEl = document.getElementById("name");
-  const timeEl = document.getElementById("time");
-  const instructionEl = document.getElementById("instruction");
-  const statusEl = document.getElementById("status");
-  const clockBtn = document.getElementById("clockBtn");
-  const reasonEl = document.getElementById("reason");
+  await liff.init({ liffId });
 
-  try {
-    await liff.init({ liffId });
-    const profile = await liff.getProfile();
+  const profile = await liff.getProfile();
+  document.getElementById("name").innerText = "你好 " + profile.displayName;
 
-    const now = new Date();
-    const timeStr = now.toLocaleString();
-    nameEl.innerText = `你好 ${profile.displayName}`;
-    timeEl.innerText = `現在時間是 ${timeStr}`;
+  const now = new Date();
+  document.getElementById("time").innerText =
+    "現在時間：" + now.toLocaleString();
 
-    // 先嘗試抓 GPS
-    if (!navigator.geolocation) {
-      instructionEl.innerText = "無法取得 GPS，請在 LINE APP 內開啟此功能";
-      return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+
+    const d = dist(lat,lng,factoryLat,factoryLng);
+
+    const btn = document.getElementById("btn");
+    const info = document.getElementById("info");
+    const reason = document.getElementById("reason");
+
+    let inRange = d <= 250;
+
+    if (inRange) {
+      info.innerText = "已在工廠範圍內 ✅";
+      btn.disabled = false;
+    } else {
+      info.innerText = "目前位於工廠範圍外 ("+Math.round(d)+"m)";
+      reason.style.display = "block";
+      reason.oninput = ()=> btn.disabled = reason.value.trim()==="";
     }
 
-    navigator.geolocation.getCurrentPosition(pos => {
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
+    btn.onclick = async ()=> {
+      document.getElementById("overlay").style.display="flex";
 
-      let distance = getDistanceFromLatLonInMeters(lat, lng, FACTORY_CENTER.lat, FACTORY_CENTER.lng);
-      let inFactory = distance <= FACTORY_RADIUS;
+      const send = {
+        userId: profile.userId,
+        name: profile.displayName,
+        lat, lng,
+        reason: inRange ? "✅" : reason.value
+      };
 
-      if (inFactory) {
-        instructionEl.innerText = "您位於工廠範圍內，可以直接打卡";
-        clockBtn.disabled = false;
-      } else {
-        instructionEl.innerText = "您目前位於工廠範圍外，請填寫原因後再打卡";
-        reasonEl.style.display = "block";
-        reasonEl.addEventListener("input", () => {
-          clockBtn.disabled = reasonEl.value.trim() === "";
-        });
-      }
-
-      clockBtn.addEventListener("click", async () => {
-        clockBtn.disabled = true;
-        let reasonText = reasonEl.value || "";
-
-        const nowPost = new Date();
-        let dateStr = nowPost.getHours() < 7
-          ? new Date(nowPost.getTime() - 24*60*60*1000).toLocaleDateString()
-          : nowPost.toLocaleDateString();
-
-        const payload = {
-          userId: profile.userId,
-          name: profile.displayName,
-          datetime: nowPost.toISOString(),
-          date: dateStr,
-          reason: reasonText
-        };
-
-        try {
-          await fetch(GAS_URL, {
-            method: "POST",
-            body: JSON.stringify(payload)
-          });
-          statusEl.innerText = "✅ 打卡完成";
-        } catch(e) {
-          statusEl.innerText = "❌ 打卡失敗：" + e.message;
-        }
+      await fetch(GAS_URL,{
+        method:"POST",
+        body:JSON.stringify(send)
       });
 
-      statusEl.innerText = "GPS 判斷完成，距離工廠中心：" + Math.round(distance) + " 公尺";
-    }, err => {
-      instructionEl.innerText = "無法取得 GPS：" + err.message;
-    });
+      document.getElementById("overlay").style.display="none";
 
-  } catch(e) {
-    statusEl.innerText = "初始化失敗：" + e.message;
-  }
+      const t = new Date().toLocaleTimeString().slice(0,5);
+      alert("✅ 打卡完成\n時間："+t);
+    };
+
+  });
+
 }
 
 main();
 </script>
+
 </body>
 </html>
