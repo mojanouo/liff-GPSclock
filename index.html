@@ -5,23 +5,31 @@
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
 <style>
-body{text-align:center;font-family:sans-serif}
+body{text-align:center;font-family:sans-serif;padding:15px}
+
 button{
  background:#6FD9B2;
  color:black;
  border:none;
- padding:12px 30px;
- border-radius:8px;
+ padding:12px 40px;
+ border-radius:10px;
  font-size:18px;
  margin-top:15px;
+ display:none;
 }
-button:disabled{background:#ccc}
+
+button:disabled{
+ background:#ccc;
+}
+
 textarea{
- width:80%;
+ width:85%;
  height:120px;
  font-size:16px;
  margin-top:10px;
+ display:none;
 }
+
 #overlay{
  position:fixed;
  inset:0;
@@ -30,21 +38,26 @@ textarea{
  align-items:center;
  justify-content:center;
  color:white;
- font-size:24px;
+ font-size:26px;
+ z-index:999;
 }
+
+#map{margin-top:10px}
 </style>
 </head>
 
 <body>
 
 <h2 id="name"></h2>
-<div id="time"></div>
+<div id="now"></div>
 <div id="distance"></div>
+<div id="hint"></div>
+
 <div id="map"></div>
 
-<textarea id="reason" placeholder="您現在位於工廠範圍外，請填寫原因"></textarea><br>
+<textarea id="reason" placeholder="您目前位於工廠範圍外，請填寫原因後再進行打卡"></textarea><br>
 
-<button id="btn" disabled onclick="clock()">打卡</button>
+<button id="btn" disabled>打卡</button>
 
 <div id="overlay">處理中...</div>
 
@@ -62,29 +75,52 @@ function dist(a,b,c,d){
  return Math.sqrt(x*x+y*y);
 }
 
+function nowTime(){
+ return new Date().toLocaleTimeString("zh-TW",{hour12:false,hour:"2-digit",minute:"2-digit"});
+}
+
 async function main(){
+
  await liff.init({liffId});
  const p=await liff.getProfile();
+
  document.getElementById("name").innerText="你好 "+p.displayName;
+ document.getElementById("now").innerText="現在時間是 "+nowTime();
+ document.getElementById("hint").innerText="定位中...";
 
  navigator.geolocation.getCurrentPosition(pos=>{
+
    const lat=pos.coords.latitude;
    const lng=pos.coords.longitude;
 
    const d=Math.round(dist(lat,lng,factory.lat,factory.lng));
+
    document.getElementById("distance").innerText="距離中心 "+d+" 公尺";
 
    document.getElementById("map").innerHTML=
    `<iframe width="100%" height="200" src="https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed"></iframe>`;
 
    const inRange=d<=R;
-   document.getElementById("btn").disabled=!inRange;
+
+   const btn=document.getElementById("btn");
+   const reason=document.getElementById("reason");
+
+   btn.style.display="inline-block";
 
    if(inRange){
-     document.getElementById("reason").style.display="none";
+     document.getElementById("hint").innerText="您位於工廠範圍內";
+     btn.disabled=false;
+   }else{
+     document.getElementById("hint").innerText="您位於工廠範圍外";
+     reason.style.display="block";
+
+     reason.addEventListener("input",()=>{
+       btn.disabled = reason.value.trim()==="";
+     });
    }
 
-   window.clock=async()=>{
+   btn.onclick=async()=>{
+
      document.getElementById("overlay").style.display="flex";
 
      await fetch(gasUrl,{
@@ -92,21 +128,22 @@ async function main(){
        body:JSON.stringify({
          userId:p.userId,
          name:p.displayName,
-         lat, lng,
-         note:document.getElementById("reason").value||"外出",
+         lat,lng,
+         note:reason.value||"外出",
          inRange
        })
      });
 
-     const t=new Date().toLocaleTimeString("zh-TW",{hour12:false,hour:"2-digit",minute:"2-digit"});
-     alert("打卡完成\n時間 "+t);
+     alert("打卡完成\n時間 "+nowTime());
      liff.closeWindow();
    };
 
  },()=>alert("定位失敗"));
+
 }
 
 main();
+
 </script>
 </body>
 </html>
