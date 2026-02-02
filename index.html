@@ -1,150 +1,112 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
 <style>
-body{font-family:Arial;padding:20px}
-
-#name{font-size:24px;font-weight:bold}
-.mid{font-size:16px;margin-top:6px}
-
-textarea{
- width:100%;
- height:120px;
- margin-top:10px;
-}
-
+body{text-align:center;font-family:sans-serif}
 button{
- padding:14px 40px;
  background:#6FD9B2;
  color:black;
  border:none;
+ padding:12px 30px;
  border-radius:8px;
  font-size:18px;
+ margin-top:15px;
 }
-
-button:disabled{
- background:#ccc;
- opacity:.5;
+button:disabled{background:#ccc}
+textarea{
+ width:80%;
+ height:120px;
+ font-size:16px;
+ margin-top:10px;
 }
-
-.center{text-align:center;margin-top:20px}
-
-#overlay,#done{
- position:fixed;top:0;left:0;width:100%;height:100%;
+#overlay{
+ position:fixed;
+ inset:0;
  background:rgba(0,0,0,.4);
- display:none;align-items:center;justify-content:center
+ display:none;
+ align-items:center;
+ justify-content:center;
+ color:white;
+ font-size:24px;
 }
-
-.box{
- background:white;padding:30px;border-radius:12px;text-align:center
-}
-
-#map{margin-top:10px}
 </style>
 </head>
 
 <body>
 
-<div id="overlay">⏳ 系統處理中...</div>
+<h2 id="name"></h2>
+<div id="time"></div>
+<div id="distance"></div>
+<div id="map"></div>
 
-<div id="done">
- <div class="box">
-  <div style="font-size:26px">✅ 打卡完成</div>
-  <div id="donetime" style="font-size:32px;margin-top:10px"></div>
- </div>
-</div>
+<textarea id="reason" placeholder="您現在位於工廠範圍外，請填寫原因"></textarea><br>
 
-<div id="name">載入中...</div>
-<div id="time" class="mid"></div>
-<div id="info" class="mid"></div>
-<img id="map" width="100%">
+<button id="btn" disabled onclick="clock()">打卡</button>
 
-<textarea id="reason" style="display:none"
- placeholder="您目前位於工廠範圍外，請說明原因後再打卡"></textarea>
-
-<div class="center">
-<button id="btn" style="display:none" disabled>打卡</button>
-</div>
+<div id="overlay">處理中...</div>
 
 <script>
 
-const liffId="2008996338-0gw2Kj6n";
-const GAS_URL="https://script.google.com/macros/s/AKfycbzl00SYdOa1_7bDNspeKy2dvbmbb-dyYAEIZ4AMjCClsljOqcixkSiNXTfWJUb-f5E/exec";
+const liffId="你的LIFFID";
+const gasUrl="你的GAS_URL";
 
-const fLat=24.09889432557895;
-const fLng=120.53815663297149;
+const factory={lat:24.09889432557895,lng:120.53815663297149};
+const R=250;
 
 function dist(a,b,c,d){
- const R=6371000;
- const x=(c-a)*Math.PI/180;
- const y=(d-b)*Math.PI/180;
- const A=Math.sin(x/2)**2+
- Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*
- Math.sin(y/2)**2;
- return R*2*Math.atan2(Math.sqrt(A),Math.sqrt(1-A));
+ const x=(c-a)*111000;
+ const y=(d-b)*111000*Math.cos(a*Math.PI/180);
+ return Math.sqrt(x*x+y*y);
 }
-
-main();
 
 async function main(){
  await liff.init({liffId});
  const p=await liff.getProfile();
-
  document.getElementById("name").innerText="你好 "+p.displayName;
- document.getElementById("time").innerText="現在時間："+new Date().toLocaleString();
 
  navigator.geolocation.getCurrentPosition(pos=>{
-  const lat=pos.coords.latitude;
-  const lng=pos.coords.longitude;
+   const lat=pos.coords.latitude;
+   const lng=pos.coords.longitude;
 
-  document.getElementById("map").src=
-   `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=17&size=600x300&markers=color:red|${lat},${lng}`;
+   const d=Math.round(dist(lat,lng,factory.lat,factory.lng));
+   document.getElementById("distance").innerText="距離中心 "+d+" 公尺";
 
-  const d=Math.round(dist(lat,lng,fLat,fLng));
-  const btn=document.getElementById("btn");
-  btn.style.display="inline-block";
+   document.getElementById("map").innerHTML=
+   `<iframe width="100%" height="200" src="https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed"></iframe>`;
 
-  let inRange=d<=250;
+   const inRange=d<=R;
+   document.getElementById("btn").disabled=!inRange;
 
-  if(inRange){
-   info.innerText="已在工廠範圍內 ✅";
-   btn.disabled=false;
-  }else{
-   info.innerText=`目前位於工廠外 ${d}m`;
-   reason.style.display="block";
-   reason.oninput=()=>btn.disabled=!reason.value.trim();
-  }
+   if(inRange){
+     document.getElementById("reason").style.display="none";
+   }
 
-  btn.onclick=async()=>{
-   overlay.style.display="flex";
+   window.clock=async()=>{
+     document.getElementById("overlay").style.display="flex";
 
-   await fetch(GAS_URL,{
-    method:"POST",
-    body:JSON.stringify({
-     userId:p.userId,
-     name:p.displayName,
-     reason:inRange?"✅":reason.value
-    })
-   });
+     await fetch(gasUrl,{
+       method:"POST",
+       body:JSON.stringify({
+         userId:p.userId,
+         name:p.displayName,
+         lat, lng,
+         note:document.getElementById("reason").value||"外出",
+         inRange
+       })
+     });
 
-   overlay.style.display="none";
+     const t=new Date().toLocaleTimeString("zh-TW",{hour12:false,hour:"2-digit",minute:"2-digit"});
+     alert("打卡完成\n時間 "+t);
+     liff.closeWindow();
+   };
 
-   const now=new Date();
-   const t=now.getHours().toString().padStart(2,"0")+":"+
-           now.getMinutes().toString().padStart(2,"0");
-
-   donetime.innerText=t;
-   done.style.display="flex";
-
-   setTimeout(()=>liff.closeWindow(),3000);
-  };
-
- });
+ },()=>alert("定位失敗"));
 }
+
+main();
 </script>
 </body>
 </html>
