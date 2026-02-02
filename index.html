@@ -7,6 +7,8 @@
 <style>
 body{text-align:center;font-family:sans-serif;padding:15px}
 
+#now{font-size:18px;margin-top:5px}
+
 button{
  background:#6FD9B2;
  color:black;
@@ -18,15 +20,13 @@ button{
  display:none;
 }
 
-button:disabled{
- background:#ccc;
-}
+button:disabled{background:#ccc}
 
 textarea{
  width:85%;
  height:120px;
  font-size:16px;
- margin-top:10px;
+ margin:10px auto;
  display:none;
 }
 
@@ -40,6 +40,18 @@ textarea{
  color:white;
  font-size:26px;
  z-index:999;
+}
+
+#done{
+ position:fixed;
+ inset:0;
+ background:white;
+ display:none;
+ flex-direction:column;
+ align-items:center;
+ justify-content:center;
+ z-index:1000;
+ font-size:26px;
 }
 
 #map{margin-top:10px}
@@ -59,12 +71,13 @@ textarea{
 
 <button id="btn" disabled>打卡</button>
 
-<div id="overlay">處理中...</div>
+<div id="overlay">⌛處理中，請稍後...</div>
+<div id="done"></div>
 
 <script>
 
 const liffId="2008996338-0gw2Kj6n";
-const gasUrl="https://script.google.com/macros/s/AKfycbxg0GBDT-bnRTeHQWbqcV1Dm2R5hM_9tL4D-1qbi_WfyCzkeNVshnP1i84CYMyG41QA/exec";
+const gasUrl="https://script.google.com/macros/s/AKfycbwPdXi3aMdpKJ0kKv8UM1Aw1C7xaULBzAfzruHBRv9suzJin4aycWG8z0es_tzdDzg2/exec";
 
 const factory={lat:24.09889432557895,lng:120.53815663297149};
 const R=250;
@@ -134,8 +147,13 @@ async function main(){
        })
      });
 
-     alert("打卡完成\n時間 "+nowTime());
-     liff.closeWindow();
+     document.getElementById("overlay").style.display="none";
+
+     document.getElementById("done").style.display="flex";
+     document.getElementById("done").innerHTML=
+     "✅ 打卡完成<br><br>時間 "+nowTime();
+
+     setTimeout(()=>liff.closeWindow(),2000);
    };
 
  },()=>alert("定位失敗"));
