@@ -1,166 +1,199 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 
 <style>
-body{text-align:center;font-family:sans-serif;padding:15px}
-
-#now{font-size:18px;margin-top:5px}
+body{font-family:sans-serif;text-align:center;margin:20px}
 
 button{
- background:#6FD9B2;
- color:black;
- border:none;
- padding:12px 40px;
- border-radius:10px;
- font-size:18px;
- margin-top:15px;
- display:none;
+width:80%;
+padding:15px;
+margin:15px auto;
+font-size:18px;
+border:none;
+border-radius:10px;
+background:#6FD9B2;
+color:#000
 }
 
-button:disabled{background:#ccc}
+.hidden{display:none}
 
-textarea{
- width:85%;
- height:120px;
- font-size:16px;
- margin:10px auto;
- display:none;
+#reason{
+width:80%;
+height:120px;
+margin:10px auto;
+display:block
 }
 
-#overlay{
- position:fixed;
- inset:0;
- background:rgba(0,0,0,.4);
- display:none;
- align-items:center;
- justify-content:center;
- color:white;
- font-size:26px;
- z-index:999;
+#loading{
+position:fixed;
+top:0;left:0;width:100%;height:100%;
+background:rgba(0,0,0,.4);
+color:white;
+display:none;
+align-items:center;
+justify-content:center;
+font-size:22px;
+z-index:10
 }
 
-#done{
- position:fixed;
- inset:0;
- background:white;
- display:none;
- flex-direction:column;
- align-items:center;
- justify-content:center;
- z-index:1000;
- font-size:26px;
+.row{
+border-bottom:1px solid #ccc;
+padding:8px
 }
-
-#map{margin-top:10px}
 </style>
 </head>
 
 <body>
 
-<h2 id="name"></h2>
-<div id="now"></div>
-<div id="distance"></div>
-<div id="hint"></div>
+<div id="loading">⌛處理中，請稍後...</div>
 
+<!-- HOME -->
+<div id="home">
+<h2 id="hello"></h2>
+<button onclick="showClock()">🟢 我要打卡</button>
+<button onclick="showQuery()">📄 查詢打卡紀錄</button>
+</div>
+
+<!-- CLOCK -->
+<div id="clock" class="hidden">
+<p id="now"></p>
 <div id="map"></div>
+<textarea id="reason" placeholder="您現在位於工廠範圍外，請說明原因"></textarea>
+<button id="clockBtn" onclick="clock()">打卡</button>
+</div>
 
-<textarea id="reason" placeholder="您目前位於工廠範圍外，請填寫原因後再進行打卡"></textarea><br>
+<!-- QUERY -->
+<div id="query" class="hidden">
+<h3 id="qname"></h3>
 
-<button id="btn" disabled>打卡</button>
+<select id="month"></select>
 
-<div id="overlay">⌛處理中，請稍後...</div>
-<div id="done"></div>
+<div id="result"></div>
+</div>
 
 <script>
 
-const liffId="2008996338-0gw2Kj6n";
-const gasUrl="https://script.google.com/macros/s/AKfycbxvxrpvcerRPdVU0Z5TxiEpk7XVNpybWbyzRXYSnWn0IwINhhklnbSb7Ezf8q8c1Bkv/exec";
+const LIFF_ID="2008996338-0gw2Kj6n";
+const GAS_CLOCK="https://script.google.com/macros/s/AKfycbw0jFClEdJxqwllwpyGlreyoQdvSxefwBmwS_LvTlY6u0sFd0tdkSaMnC86Kjc7ifEL/exec";
+const GAS_QUERY="https://script.google.com/macros/s/AKfycbx7Sxeoi-dlGzm1xociZHFD7599bK5jGdpQveiJVGekI_PBgEeH-GfRWaee5onVW5A0mA/exec";
 
-const factory={lat:24.09889432557895,lng:120.53815663297149};
-const R=250;
+let profile,lat,lng,inRange=false;
 
-function dist(a,b,c,d){
- const x=(c-a)*111000;
- const y=(d-b)*111000*Math.cos(a*Math.PI/180);
- return Math.sqrt(x*x+y*y);
-}
+async function start(){
 
-function nowTime(){
- return new Date().toLocaleTimeString("zh-TW",{hour12:false,hour:"2-digit",minute:"2-digit"});
-}
+await liff.init({liffId:LIFF_ID});
+profile=await liff.getProfile();
 
-async function main(){
-
- await liff.init({liffId});
- const p=await liff.getProfile();
-
- document.getElementById("name").innerText="你好 "+p.displayName;
- document.getElementById("now").innerText="現在時間是 "+nowTime();
- document.getElementById("hint").innerText="定位中...";
-
- navigator.geolocation.getCurrentPosition(pos=>{
-
-   const lat=pos.coords.latitude;
-   const lng=pos.coords.longitude;
-
-   const d=Math.round(dist(lat,lng,factory.lat,factory.lng));
-
-   document.getElementById("distance").innerText="距離中心 "+d+" 公尺";
-
-   document.getElementById("map").innerHTML=
-   `<iframe width="100%" height="200" src="https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed"></iframe>`;
-
-   const inRange=d<=R;
-
-   const btn=document.getElementById("btn");
-   const reason=document.getElementById("reason");
-
-   btn.style.display="inline-block";
-
-   if(inRange){
-     document.getElementById("hint").innerText="您位於工廠範圍內";
-     btn.disabled=false;
-   }else{
-     document.getElementById("hint").innerText="您位於工廠範圍外";
-     reason.style.display="block";
-
-     reason.addEventListener("input",()=>{
-       btn.disabled = reason.value.trim()==="";
-     });
-   }
-
-   btn.onclick=async()=>{
-
-     document.getElementById("overlay").style.display="flex";
-
-     await fetch(gasUrl,{
-       method:"POST",
-       body:JSON.stringify({
-         userId:p.userId,
-         name:p.displayName,
-         lat,lng,
-         note:reason.value||"外出",
-         inRange
-       })
-     });
-
-     document.getElementById("overlay").style.display="none";
-
-     document.getElementById("done").style.display="flex";
-     document.getElementById("done").innerHTML=
-     "✅ 打卡完成<br><br>時間 "+nowTime();
-
-     setTimeout(()=>liff.closeWindow(),2000);
-   };
-
- },()=>alert("定位失敗"));
+document.getElementById("hello").innerText="你好 "+profile.displayName;
 
 }
 
-main();
+start();
+
+function showClock(){
+home.classList.add("hidden");
+clock.classList.remove("hidden");
+initClock();
+}
+
+function showQuery(){
+home.classList.add("hidden");
+query.classList.remove("hidden");
+loadMonths();
+}
+
+function initClock(){
+
+now.innerText="現在時間："+new Date().toLocaleTimeString("zh-TW",{hour:'2-digit',minute:'2-digit'});
+
+navigator.geolocation.getCurrentPosition(p=>{
+
+lat=p.coords.latitude;
+lng=p.coords.longitude;
+
+const d=getDistance(lat,lng,24.0988943,120.5381566);
+inRange=d<250;
+
+map.innerHTML=`<img width=90% src="https://maps.googleapis.com/maps/api/staticmap?zoom=17&size=400x300&markers=${lat},${lng}">`;
+
+reason.style.display=inRange?"none":"block";
+clockBtn.disabled=!inRange;
+
+});
+
+}
+
+function getDistance(a,b,c,d){
+const R=6371000;
+const x=(c-a)*Math.PI/180;
+const y=(d-b)*Math.PI/180;
+return Math.sqrt(x*x+y*y)*R;
+}
+
+async function clock(){
+
+if(!inRange && !reason.value.trim())return alert("請輸入原因");
+
+loading.style.display="flex";
+
+await fetch(GAS_CLOCK,{
+method:"POST",
+body:JSON.stringify({
+userId:profile.userId,
+name:profile.displayName,
+lat,lng,
+note:reason.value,
+inRange
+})
+});
+
+loading.style.display="none";
+
+alert("✅ 打卡完成\n"+new Date().toLocaleTimeString("zh-TW",{hour:'2-digit',minute:'2-digit'}));
+
+liff.closeWindow();
+
+}
+
+async function loadMonths(){
+
+qname.innerText=profile.displayName;
+
+const res=await fetch(GAS_QUERY+"?uid="+profile.userId);
+const data=await res.json();
+
+if(!data.length){
+result.innerHTML="查無相關資料";
+return;
+}
+
+const months=[...new Set(data.map(r=>r.date.substr(0,7)))];
+
+month.innerHTML=months.map(m=>`<option>${m}</option>`).join("");
+
+month.onchange=()=>render(data);
+
+render(data);
+
+}
+
+function render(data){
+
+const m=month.value;
+
+const rows=data.filter(r=>r.date.startsWith(m));
+
+result.innerHTML=rows.map(r=>`
+<div class=row>
+${r.date}　${r.times.join(" | ")}
+</div>
+`).join("");
+
+}
 
 </script>
 </body>
